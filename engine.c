@@ -13,15 +13,15 @@
 typedef struct {
     double x;
     double y;
-} vert;
+} point;
 
 typedef struct {
-    vert v1;
-    vert v2;
+    point v1;
+    point v2;
 } wall;
 
 typedef struct {
-    vert loc;
+    point loc;
     double angle;
     double fvel;
     double avel;
@@ -36,15 +36,15 @@ unsigned int time_last = 0;
 unsigned int time_current = 0;
 unsigned int time_delta = 0;
 
-vert vert_to_screen_coords(vert v)
+point point_to_screen_coords(point v)
 {
     // Rotate around the player
-    vert v_trans = {
+    point v_trans = {
 		(v.x - p.loc.x) * cos(p.angle) - (v.y - p.loc.y) * sin(p.angle),
 		(v.x - p.loc.x) * sin(p.angle) + (v.y - p.loc.y) * cos(p.angle)
 	};
 
-	// Translate the vertex to screen coordinates
+	// Translate the pointex to screen coordinates
 	v_trans.x += VIEW_WIDTH / 2;
 	v_trans.y += VIEW_HEIGHT / 2;
 
@@ -53,14 +53,14 @@ vert vert_to_screen_coords(vert v)
 
 wall wall_to_screen_coords(wall w)
 {
-    wall w_trans = {vert_to_screen_coords(w.v1), vert_to_screen_coords(w.v2)};
+    wall w_trans = {point_to_screen_coords(w.v1), point_to_screen_coords(w.v2)};
     return w_trans;
 }
 
-vert vert_to_player_coords(vert v)
+point point_to_player_coords(point v)
 {
     // Rotate around the player
-    vert v_trans = {
+    point v_trans = {
 		(v.x - p.loc.x) * cos(p.angle) - (v.y - p.loc.y) * sin(p.angle),
 		(v.x - p.loc.x) * sin(p.angle) + (v.y - p.loc.y) * cos(p.angle)
 	};
@@ -70,7 +70,7 @@ vert vert_to_player_coords(vert v)
 
 wall wall_to_player_coords(wall w)
 {
-    wall w_trans = {vert_to_player_coords(w.v1), vert_to_player_coords(w.v2)};
+    wall w_trans = {point_to_player_coords(w.v1), point_to_player_coords(w.v2)};
     return w_trans;
 }
 
@@ -126,6 +126,20 @@ void render_relative(SDL_Renderer* renderer)
     SDL_RenderDrawLine(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2, VIEW_WIDTH/2, VIEW_HEIGHT/2 + 20);
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawPoint(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2);
+
+	// If only one vertex of the wall is behind the player, find the
+	// intersection with y=0 and clip the wall.
+	if (wt.v1.y <= VIEW_HEIGHT/2 && wt.v2.y <= VIEW_HEIGHT/2) return;
+	if (wt.v1.y <= VIEW_HEIGHT/2 || wt.v2.y <= VIEW_HEIGHT/2) {
+		point intersect = {
+			wt.v1.x - (wt.v2.x - wt.v1.x) / (wt.v2.y - wt.v1.y) * (wt.v1.y - VIEW_HEIGHT/2), // x-coord
+			VIEW_HEIGHT/2 // y-coord
+		};
+    	SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+    	SDL_RenderDrawPoint(renderer, wt.v1.x, wt.v1.y);
+    	SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+    	SDL_RenderDrawPoint(renderer, intersect.x, intersect.y);
+	}
 }
 
 void render_perspective(SDL_Renderer* renderer)
@@ -140,7 +154,19 @@ void render_perspective(SDL_Renderer* renderer)
     wall wt = wall_to_player_coords(w);
 
     // If the wall is completely behind the player, don't draw it
-	if(wt.v1.y <= 0 && wt.v2.y <= 0) return;
+	if (wt.v1.y <= 0 && wt.v2.y <= 0) return;
+
+	// If only one vertex of the wall is behind the player, find the
+	// intersection with y=0 and clip the wall.
+	if (wt.v1.y <= 0 || wt.v2.y <= 0) {
+		point intersect = {
+			wt.v1.x - (wt.v2.x - wt.v1.x) / (wt.v2.y - wt.v1.y) * wt.v1.y, // x-coord
+			0.0001 // y-coord
+		};
+
+		if (wt.v2.y < wt.v1.y) wt.v2 = intersect;
+		else wt.v1 = intersect;
+	}
 
     SDL_RenderDrawLine(
 		renderer,
