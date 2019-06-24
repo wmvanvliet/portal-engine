@@ -2,9 +2,17 @@
 #include <math.h>
 #include <stdio.h>
 
+#define SCREEN_HEIGHT 700
+#define SCREEN_WIDTH 1100
+#define VIEW_HEIGHT 600
+#define VIEW_WIDTH 300
+
+#define FOV_H (0.5 * VIEW_WIDTH)
+#define FOV_V (10 * VIEW_HEIGHT)
+
 typedef struct {
-    float x;
-    float y;
+    double x;
+    double y;
 } vert;
 
 typedef struct {
@@ -14,30 +22,48 @@ typedef struct {
 
 typedef struct {
     vert loc;
-    float angle;
-    float fvel;
-    float avel;
+    double angle;
+    double fvel;
+    double avel;
 } player;
 
-player p = {100, 100, 0, 0, 0};
+// The world
+player p = {150, 250, 0, 0, 0};
+wall w = {{50, 450}, {250, 450}};
+
 SDL_bool done = SDL_FALSE;
 unsigned int time_last = 0;
 unsigned int time_current = 0;
 unsigned int time_delta = 0;
 
+vert vert_to_screen_coords(vert v)
+{
+    // Rotate around the player
+    vert v_trans = {
+		(v.x - p.loc.x) * cos(p.angle) - (v.y - p.loc.y) * sin(p.angle),
+		(v.x - p.loc.x) * sin(p.angle) + (v.y - p.loc.y) * cos(p.angle)
+	};
+
+	// Translate the vertex to screen coordinates
+	v_trans.x += VIEW_WIDTH / 2;
+	v_trans.y += VIEW_HEIGHT / 2;
+
+    return v_trans;
+}
+
+wall wall_to_screen_coords(wall w)
+{
+    wall w_trans = {vert_to_screen_coords(w.v1), vert_to_screen_coords(w.v2)};
+    return w_trans;
+}
+
 vert vert_to_player_coords(vert v)
 {
-    vert v_trans = v;
-
-    // Make player the center of the world
-    /*
-    v_trans.x -= (int) p.loc.x;
-    v_trans.y += (int) p.loc.y;
-    */
-
-    // Apply player rotation in reverse to the vertex
-    v_trans.x = v_trans.x * cos(p.angle) - v_trans.y * sin(p.angle);
-    v_trans.y = v_trans.x * sin(p.angle) + v_trans.y * cos(p.angle);
+    // Rotate around the player
+    vert v_trans = {
+		(v.x - p.loc.x) * cos(p.angle) - (v.y - p.loc.y) * sin(p.angle),
+		(v.x - p.loc.x) * sin(p.angle) + (v.y - p.loc.y) * cos(p.angle)
+	};
 
     return v_trans;
 }
@@ -58,33 +84,82 @@ void update()
 
     // Update player
     p.loc.x += time_delta * p.fvel * sin(p.angle);
-    p.loc.y -= time_delta * p.fvel * cos(p.angle);
-    p.angle += time_delta * p.avel;
+    p.loc.y += time_delta * p.fvel * cos(p.angle);
+    p.angle -= time_delta * p.avel;
+
+	if (p.angle < 0) p.angle += 2 * M_PI;
+	if (p.angle > 2 * M_PI) p.angle -= 2 * M_PI;
 }
 
-void render(SDL_Renderer* renderer)
+void render_absolute(SDL_Renderer* renderer)
 {
-    wall w = {{50, 50}, {500, 50}};
-
-    // Clear screen
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderClear(renderer);
+	// Render viewport border
+	SDL_Rect border = {0, 0, VIEW_WIDTH, VIEW_HEIGHT};
+	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderDrawRect(renderer, &border);
 
     // Render wall
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    w = wall_to_player_coords(w);
     SDL_RenderDrawLine(renderer, w.v1.x, w.v1.y, w.v2.x, w.v2.y);
 
     // Render player
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawLine(renderer, 320, 200, 320, 190);
+    SDL_RenderDrawLine(renderer, p.loc.x, p.loc.y, p.loc.x + 20 * sin(p.angle), p.loc.y + 20 * cos(p.angle));
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawPoint(renderer, 320, 200);
-
-    SDL_RenderPresent(renderer);
+    SDL_RenderDrawPoint(renderer, p.loc.x, p.loc.y);
 }
 
-void handle_events(SDL_Renderer* renderer)
+void render_relative(SDL_Renderer* renderer)
+{
+	// Render viewport border
+	SDL_Rect border = {0, 0, VIEW_WIDTH, VIEW_HEIGHT};
+	SDL_SetRenderDrawColor(renderer, 255, 0, 255, SDL_ALPHA_OPAQUE);
+	SDL_RenderDrawRect(renderer, &border);
+
+    // Render wall
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+    wall wt = wall_to_screen_coords(w);
+    SDL_RenderDrawLine(renderer, wt.v1.x, wt.v1.y, wt.v2.x, wt.v2.y);
+
+    // Render player
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, SDL_ALPHA_OPAQUE);
+    SDL_RenderDrawLine(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2, VIEW_WIDTH/2, VIEW_HEIGHT/2 + 20);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+    SDL_RenderDrawPoint(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2);
+}
+
+void render_perspective(SDL_Renderer* renderer)
+{
+	// Render viewport border
+	SDL_Rect border = {0, 0, VIEW_WIDTH, VIEW_HEIGHT};
+	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
+	SDL_RenderDrawRect(renderer, &border);
+
+    // Render wall
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+    wall wt = wall_to_player_coords(w);
+
+    // If the wall is completely behind the player, don't draw it
+	if(wt.v1.y <= 0 && wt.v2.y <= 0) return;
+
+    SDL_RenderDrawLine(
+		renderer,
+		wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
+		-FOV_V / wt.v1.y + VIEW_HEIGHT/2,
+		wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
+		-FOV_V / wt.v2.y + VIEW_HEIGHT/2
+    );
+
+    SDL_RenderDrawLine(
+		renderer,
+		wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
+		FOV_V / wt.v1.y + VIEW_HEIGHT/2,
+		wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
+		FOV_V / wt.v2.y + VIEW_HEIGHT/2
+    );
+}
+
+void handle_events()
 {
     SDL_Event event;
 
@@ -101,10 +176,10 @@ void handle_events(SDL_Renderer* renderer)
                         done = SDL_TRUE;
                         break;
                     case SDLK_LEFT:
-                        p.avel = -0.005;
+                        p.avel = -0.002;
                         break;
                     case SDLK_RIGHT:
-                        p.avel = 0.005;
+                        p.avel = 0.002;
                         break;
                     case SDLK_UP:
                         p.fvel = 0.1;
@@ -141,20 +216,33 @@ int main(int argc, char* argv[])
         SDL_Window* window = NULL;
         SDL_Renderer* renderer = NULL;
 
-        if (SDL_CreateWindowAndRenderer(640, 480, 0, &window, &renderer) == 0) {
-            while (!done) {
-                handle_events(renderer);
-                update();
-				render(renderer);
-            }
-        }
+        SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, 0, &window, &renderer);
 
-        if (renderer) {
-            SDL_DestroyRenderer(renderer);
-        }
-        if (window) {
-            SDL_DestroyWindow(window);
-        }
+		SDL_Rect absolute_viewport = {50, 50, VIEW_WIDTH, VIEW_HEIGHT};
+		SDL_Rect relative_viewport = {400, 50, VIEW_WIDTH, VIEW_HEIGHT};
+		SDL_Rect perspective_viewport = {750, 50, VIEW_WIDTH, VIEW_HEIGHT};
+
+		while (!done) {
+			handle_events();
+			update();
+
+			// Clear screen
+			SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+			SDL_RenderClear(renderer);
+
+			// Render viewports
+			SDL_RenderSetViewport(renderer, &absolute_viewport);
+			render_absolute(renderer);
+			SDL_RenderSetViewport(renderer, &relative_viewport);
+			render_relative(renderer);
+			SDL_RenderSetViewport(renderer, &perspective_viewport);
+			render_perspective(renderer);
+
+		    SDL_RenderPresent(renderer);
+		}
+
+        if (renderer) SDL_DestroyRenderer(renderer);
+        if (window) SDL_DestroyWindow(window);
     }
     SDL_Quit();
     return 0;
