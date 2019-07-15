@@ -28,7 +28,7 @@ typedef struct {
 } player;
 
 // The world
-player p = {150, 250, 0, 0, 0};
+player p = {{150, 250}, 0, 0, 0};
 wall w = {{50, 450}, {250, 450}};
 
 SDL_bool done = SDL_FALSE;
