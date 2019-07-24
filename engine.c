@@ -6,9 +6,12 @@
 #define SCREEN_WIDTH 1100
 #define VIEW_HEIGHT 600
 #define VIEW_WIDTH 300
+#define FOV_H (VIEW_WIDTH / 2)
+#define FOV_V (VIEW_HEIGHT / 4)
+#define PLAYER_EYE_LEVEL 1.6
 
-#define FOV_H 10 // (2 * VIEW_WIDTH)
-#define FOV_V (10 * VIEW_HEIGHT)
+float fov_h = VIEW_WIDTH / 2;
+float fov_v = VIEW_HEIGHT / 4;
 
 #define METERS_TO_PIXELS 10 // One meter is 10 pixels
 
@@ -186,18 +189,18 @@ void render_perspective(SDL_Renderer* renderer)
 
 		SDL_RenderDrawLine(
 			renderer,
-			wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
-			-FOV_V / wt.v1.y + VIEW_HEIGHT/2,
-			wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
-			-FOV_V / wt.v2.y + VIEW_HEIGHT/2
+			wt.v1.x * fov_h / wt.v1.y + VIEW_WIDTH/2,
+			-fov_v / wt.v1.y + VIEW_HEIGHT/2,
+			wt.v2.x * fov_h / wt.v2.y + VIEW_WIDTH/2,
+			-fov_v / wt.v2.y + VIEW_HEIGHT/2
 		);
 
 		SDL_RenderDrawLine(
 			renderer,
-			wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
-			FOV_V / wt.v1.y + VIEW_HEIGHT/2,
-			wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
-			FOV_V / wt.v2.y + VIEW_HEIGHT/2
+			wt.v1.x * fov_h / wt.v1.y + VIEW_WIDTH/2,
+			fov_v / wt.v1.y + VIEW_HEIGHT/2,
+			wt.v2.x * fov_h / wt.v2.y + VIEW_WIDTH/2,
+			fov_v / wt.v2.y + VIEW_HEIGHT/2
 		);
 	}
 }
@@ -230,6 +233,22 @@ void handle_events()
                     case SDLK_DOWN:
                         p.fvel = -0.01;
                         break;
+                    case SDLK_a:
+						fov_h -= 10;
+						printf("fov_h=%f\n", fov_h);
+						break;
+                    case SDLK_d:
+						fov_h += 10;
+						printf("fov_h=%f\n", fov_h);
+						break;
+                    case SDLK_w:
+						fov_v += 10;
+						printf("fov_v=%f\n", fov_v);
+						break;
+                    case SDLK_s:
+						fov_v -= 10;
+						printf("fov_v=%f\n", fov_v);
+						break;
                 }
                 break;
             case SDL_KEYUP:
