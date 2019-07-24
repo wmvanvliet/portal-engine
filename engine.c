@@ -7,8 +7,10 @@
 #define VIEW_HEIGHT 600
 #define VIEW_WIDTH 300
 
-#define FOV_H (0.5 * VIEW_WIDTH)
+#define FOV_H 10 // (2 * VIEW_WIDTH)
 #define FOV_V (10 * VIEW_HEIGHT)
+
+#define METERS_TO_PIXELS 10 // One meter is 10 pixels
 
 typedef struct {
     double x;
@@ -28,8 +30,14 @@ typedef struct {
 } player;
 
 // The world
-player p = {{150, 250}, 0, 0, 0};
-wall w = {{50, 450}, {250, 450}};
+player p = {{0, 0}, 0, 0, 0};
+wall world[] = {
+	{{-10, 10}, {10, 10}},
+	{{-10, -10}, {10, -10}},
+	{{-10, -10}, {-10, 10}},
+	{{10, -10}, {10, 10}},
+};
+unsigned int n_walls = 4;
 
 SDL_bool done = SDL_FALSE;
 unsigned int time_last = 0;
@@ -39,15 +47,8 @@ unsigned int time_delta = 0;
 point point_to_screen_coords(point v)
 {
     // Rotate around the player
-    point v_trans = {
-		(v.x - p.loc.x) * cos(p.angle) - (v.y - p.loc.y) * sin(p.angle),
-		(v.x - p.loc.x) * sin(p.angle) + (v.y - p.loc.y) * cos(p.angle)
-	};
-
-	// Translate the pointex to screen coordinates
-	v_trans.x += VIEW_WIDTH / 2;
-	v_trans.y += VIEW_HEIGHT / 2;
-
+    point v_trans = {v.x * METERS_TO_PIXELS + VIEW_WIDTH/2,
+		             v.y * METERS_TO_PIXELS + VIEW_HEIGHT/2};
     return v_trans;
 }
 
@@ -98,15 +99,19 @@ void render_absolute(SDL_Renderer* renderer)
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);
 	SDL_RenderDrawRect(renderer, &border);
 
-    // Render wall
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawLine(renderer, w.v1.x, w.v1.y, w.v2.x, w.v2.y);
+    // Render walls
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+	for(int i=0; i<n_walls; i++) {
+		wall w = wall_to_screen_coords(world[i]);
+		SDL_RenderDrawLine(renderer, w.v1.x, w.v1.y, w.v2.x, w.v2.y);
+	}
 
     // Render player
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawLine(renderer, p.loc.x, p.loc.y, p.loc.x + 20 * sin(p.angle), p.loc.y + 20 * cos(p.angle));
+	point loc = point_to_screen_coords(p.loc);
+    SDL_RenderDrawLine(renderer, loc.x, loc.y, loc.x + 20 * sin(p.angle), loc.y + 20 * cos(p.angle));
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderDrawPoint(renderer, p.loc.x, p.loc.y);
+    SDL_RenderDrawPoint(renderer, loc.x, loc.y);
 }
 
 void render_relative(SDL_Renderer* renderer)
@@ -116,30 +121,39 @@ void render_relative(SDL_Renderer* renderer)
 	SDL_SetRenderDrawColor(renderer, 255, 0, 255, SDL_ALPHA_OPAQUE);
 	SDL_RenderDrawRect(renderer, &border);
 
-    // Render wall
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    wall wt = wall_to_screen_coords(w);
-    SDL_RenderDrawLine(renderer, wt.v1.x, wt.v1.y, wt.v2.x, wt.v2.y);
+    // Render walls
+	for(int i=0; i<n_walls; i++) {
+		wall w = world[i];
+		wall wt = wall_to_screen_coords(wall_to_player_coords(w));
+		
+		// Determine wall color based on whether the player can see the wall
+		if (wt.v1.y <= VIEW_HEIGHT/2 && wt.v2.y <= VIEW_HEIGHT/2)
+			SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);
+		else
+   	    	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+
+		// Draw the wall
+		SDL_RenderDrawLine(renderer, wt.v1.x, wt.v1.y, wt.v2.x, wt.v2.y);
+
+		// If only one vertex of the wall is behind the player, find the
+		// intersection with y=0 and mark it with a single red pixel.
+		if (wt.v1.y <= VIEW_HEIGHT/2 || wt.v2.y <= VIEW_HEIGHT/2) {
+			point intersect = {
+				wt.v1.x - (wt.v2.x - wt.v1.x) / (wt.v2.y - wt.v1.y) * (wt.v1.y - VIEW_HEIGHT/2), // x-coord
+				VIEW_HEIGHT/2 // y-coord
+			};
+			SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+			SDL_RenderDrawPoint(renderer, wt.v1.x, wt.v1.y);
+			SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+			SDL_RenderDrawPoint(renderer, intersect.x, intersect.y);
+		}
+	}
 
     // Render player
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawLine(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2, VIEW_WIDTH/2, VIEW_HEIGHT/2 + 20);
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderDrawPoint(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2);
-
-	// If only one vertex of the wall is behind the player, find the
-	// intersection with y=0 and clip the wall.
-	if (wt.v1.y <= VIEW_HEIGHT/2 && wt.v2.y <= VIEW_HEIGHT/2) return;
-	if (wt.v1.y <= VIEW_HEIGHT/2 || wt.v2.y <= VIEW_HEIGHT/2) {
-		point intersect = {
-			wt.v1.x - (wt.v2.x - wt.v1.x) / (wt.v2.y - wt.v1.y) * (wt.v1.y - VIEW_HEIGHT/2), // x-coord
-			VIEW_HEIGHT/2 // y-coord
-		};
-    	SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
-    	SDL_RenderDrawPoint(renderer, wt.v1.x, wt.v1.y);
-    	SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-    	SDL_RenderDrawPoint(renderer, intersect.x, intersect.y);
-	}
 }
 
 void render_perspective(SDL_Renderer* renderer)
@@ -149,40 +163,43 @@ void render_perspective(SDL_Renderer* renderer)
 	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
 	SDL_RenderDrawRect(renderer, &border);
 
-    // Render wall
+    // Render walls
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-    wall wt = wall_to_player_coords(w);
+	for(int i=0; i<n_walls; i++) {
+		wall w = world[i];
+		wall wt = wall_to_player_coords(w);
 
-    // If the wall is completely behind the player, don't draw it
-	if (wt.v1.y <= 0 && wt.v2.y <= 0) return;
+		// If the wall is completely behind the player, don't draw it
+		if (wt.v1.y <= 0 && wt.v2.y <= 0) continue;
 
-	// If only one vertex of the wall is behind the player, find the
-	// intersection with y=0 and clip the wall.
-	if (wt.v1.y <= 0 || wt.v2.y <= 0) {
-		point intersect = {
-			wt.v1.x - (wt.v2.x - wt.v1.x) / (wt.v2.y - wt.v1.y) * wt.v1.y, // x-coord
-			0.0001 // y-coord
-		};
+		// If only one vertex of the wall is behind the player, find the
+		// intersection with y=0 and clip the wall.
+		if (wt.v1.y <= 0 || wt.v2.y <= 0) {
+			point intersect = {
+				wt.v1.x - (wt.v2.x - wt.v1.x) / (wt.v2.y - wt.v1.y) * wt.v1.y, // x-coord
+				0.0001 // y-coord
+			};
 
-		if (wt.v2.y < wt.v1.y) wt.v2 = intersect;
-		else wt.v1 = intersect;
+			if (wt.v2.y < wt.v1.y) wt.v2 = intersect;
+			else wt.v1 = intersect;
+		}
+
+		SDL_RenderDrawLine(
+			renderer,
+			wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
+			-FOV_V / wt.v1.y + VIEW_HEIGHT/2,
+			wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
+			-FOV_V / wt.v2.y + VIEW_HEIGHT/2
+		);
+
+		SDL_RenderDrawLine(
+			renderer,
+			wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
+			FOV_V / wt.v1.y + VIEW_HEIGHT/2,
+			wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
+			FOV_V / wt.v2.y + VIEW_HEIGHT/2
+		);
 	}
-
-    SDL_RenderDrawLine(
-		renderer,
-		wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
-		-FOV_V / wt.v1.y + VIEW_HEIGHT/2,
-		wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
-		-FOV_V / wt.v2.y + VIEW_HEIGHT/2
-    );
-
-    SDL_RenderDrawLine(
-		renderer,
-		wt.v1.x * FOV_H / wt.v1.y + VIEW_WIDTH/2,
-		FOV_V / wt.v1.y + VIEW_HEIGHT/2,
-		wt.v2.x * FOV_H / wt.v2.y + VIEW_WIDTH/2,
-		FOV_V / wt.v2.y + VIEW_HEIGHT/2
-    );
 }
 
 void handle_events()
@@ -208,10 +225,10 @@ void handle_events()
                         p.avel = 0.002;
                         break;
                     case SDLK_UP:
-                        p.fvel = 0.1;
+                        p.fvel = 0.01;
                         break;
                     case SDLK_DOWN:
-                        p.fvel = -0.1;
+                        p.fvel = -0.01;
                         break;
                 }
                 break;
