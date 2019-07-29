@@ -10,6 +10,11 @@
 #define FOV_V (VIEW_HEIGHT / 4)
 #define PLAYER_EYE_LEVEL 1.6
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define CLAMP(x, a, b) (MIN(MAX(x, a), b))
+#define SIGN(x) ((x) < 0 ? (-1) : (1))
+
 float fov_h = VIEW_WIDTH / 2;
 float fov_v = VIEW_HEIGHT / 4;
 
@@ -23,6 +28,8 @@ typedef struct {
 typedef struct {
     point v1;
     point v2;
+	double h;
+	SDL_Color c;
 } wall;
 
 typedef struct {
@@ -35,10 +42,10 @@ typedef struct {
 // The world
 player p = {{0, 0}, 0, 0, 0};
 wall world[] = {
-	{{-10, 10}, {10, 10}},
-	{{-10, -10}, {10, -10}},
-	{{-10, -10}, {-10, 10}},
-	{{10, -10}, {10, 10}},
+	{{-10, 10}, {10, 10}, 4, {255, 0, 0, 255}},
+	{{-10, -10}, {10, -10}, 4, {0, 255, 0, 255}},
+	{{-10, 10}, {-10, -10}, 4, {0, 0, 255, 255}},
+	{{10, -10}, {10, 10}, 4, {255, 255, 0, 255}},
 };
 unsigned int n_walls = 4;
 
@@ -57,7 +64,7 @@ point point_to_screen_coords(point v)
 
 wall wall_to_screen_coords(wall w)
 {
-    wall w_trans = {point_to_screen_coords(w.v1), point_to_screen_coords(w.v2)};
+    wall w_trans = {point_to_screen_coords(w.v1), point_to_screen_coords(w.v2), w.h, w.c};
     return w_trans;
 }
 
@@ -74,7 +81,7 @@ point point_to_player_coords(point v)
 
 wall wall_to_player_coords(wall w)
 {
-    wall w_trans = {point_to_player_coords(w.v1), point_to_player_coords(w.v2)};
+    wall w_trans = {point_to_player_coords(w.v1), point_to_player_coords(w.v2), w.h, w.c};
     return w_trans;
 }
 
@@ -159,6 +166,20 @@ void render_relative(SDL_Renderer* renderer)
     SDL_RenderDrawPoint(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2);
 }
 
+void draw_wall(SDL_Renderer* renderer, wall w)
+{
+    SDL_SetRenderDrawColor(renderer, w.c.r, w.c.g, w.c.b, w.c.a);
+	int x1 = w.v1.x * fov_h / w.v1.y + VIEW_WIDTH/2;
+	int x2 = w.v2.x * fov_h / w.v2.y + VIEW_WIDTH/2;
+	double y1 = w.h * fov_v / w.v1.y;
+	double y2 = w.h * fov_v / w.v2.y;
+
+	for (int x = CLAMP(MIN(x1, x2), 0, VIEW_WIDTH); x < CLAMP(MAX(x1, x2), 0, VIEW_WIDTH); ++x) {
+		double y = y1 + (y2 - y1) * (x - x1) / (x2 - x1);
+		SDL_RenderDrawLine(renderer, x, -y + VIEW_HEIGHT/2, x, y + VIEW_HEIGHT/2);
+	}
+}
+
 void render_perspective(SDL_Renderer* renderer)
 {
 	// Render viewport border
@@ -167,8 +188,7 @@ void render_perspective(SDL_Renderer* renderer)
 	SDL_RenderDrawRect(renderer, &border);
 
     // Render walls
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-	for(int i=0; i<n_walls; i++) {
+	for (int i=0; i<n_walls; i++) {
 		wall w = world[i];
 		wall wt = wall_to_player_coords(w);
 
@@ -187,21 +207,7 @@ void render_perspective(SDL_Renderer* renderer)
 			else wt.v1 = intersect;
 		}
 
-		SDL_RenderDrawLine(
-			renderer,
-			wt.v1.x * fov_h / wt.v1.y + VIEW_WIDTH/2,
-			-fov_v / wt.v1.y + VIEW_HEIGHT/2,
-			wt.v2.x * fov_h / wt.v2.y + VIEW_WIDTH/2,
-			-fov_v / wt.v2.y + VIEW_HEIGHT/2
-		);
-
-		SDL_RenderDrawLine(
-			renderer,
-			wt.v1.x * fov_h / wt.v1.y + VIEW_WIDTH/2,
-			fov_v / wt.v1.y + VIEW_HEIGHT/2,
-			wt.v2.x * fov_h / wt.v2.y + VIEW_WIDTH/2,
-			fov_v / wt.v2.y + VIEW_HEIGHT/2
-		);
+		draw_wall(renderer, wt);
 	}
 }
 
