@@ -13,6 +13,7 @@
 #define FOV_H (VIEW_WIDTH / 2)
 #define FOV_V (VIEW_HEIGHT / 4)
 #define PLAYER_EYE_LEVEL -10000
+#define UNITS_TO_PIXELS 0.05
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -26,15 +27,9 @@
 // Determine which side of a line the point is on. Return value: <0, =0 or >0.
 #define POINT_SIDE(px, py, x0, y0, x1, y1) VXS((x1)-(x0), (y1)-(y0), (px)-(x0), (py)-(y0))
 
+// Field of view
 float fov_h = 280;
 float fov_v = 20;
-
-#define UNITS_TO_PIXELS 0.05
-
-typedef struct {
-    double x;
-    double y;
-} point;
 
 typedef struct {
     double x;
