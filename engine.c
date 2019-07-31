@@ -137,12 +137,14 @@ void render_map(SDL_Renderer* renderer)
 			double y1 = (w1->x - p.x) * sin(p.angle) + (w1->y - p.y) * cos(p.angle);
 			double x2 = (w2->x - p.x) * cos(p.angle) - (w2->y - p.y) * sin(p.angle);
 			double y2 = (w2->x - p.x) * sin(p.angle) + (w2->y - p.y) * cos(p.angle);
-			//printf("%d) %f %f - %f %f\n", j, x1, y1, x2, y2);
+
+			// Scale and translate the map to fit the viewport
 			x1 = x1 * UNITS_TO_PIXELS + MAP_WIDTH/2;
 			y1 = y1 * UNITS_TO_PIXELS + MAP_HEIGHT/2;
 			x2 = x2 * UNITS_TO_PIXELS + MAP_WIDTH/2;
 			y2 = y2 * UNITS_TO_PIXELS + MAP_HEIGHT/2;
 
+			// Determine color of the wall
 			if (w1->next_sector >= 0)
 				// Wall is a portal
 				SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
@@ -307,12 +309,15 @@ void handle_events()
 int main(int argc, char* argv[])
 {
 	w = load_map("test.map");
+
+	// Set the player's location, based on the starting point stored in the map
 	p.sector = w->cur_sector;
 	p.x = w->pos_x;
 	p.y = w->pos_y;
 	p.z = w->sectors[p.sector].floor_z + PLAYER_EYE_LEVEL;
 	printf("Player starts at (%f, %f, %f) in sector %d\n", p.x, p.y, p.z, p.sector);
 
+	// Initialize graphics!
     if (SDL_Init(SDL_INIT_VIDEO) == 0) {
         SDL_Window* window = NULL;
         SDL_Renderer* renderer = NULL;
@@ -322,6 +327,7 @@ int main(int argc, char* argv[])
 		SDL_Rect map_viewport = {50, 50, MAP_WIDTH, MAP_HEIGHT};
 		SDL_Rect perspective_viewport = {375, 50, VIEW_WIDTH, VIEW_HEIGHT};
 
+		// Main loop of the engine
 		while (!done) {
 			handle_events();
 			update();
@@ -336,12 +342,15 @@ int main(int argc, char* argv[])
 			SDL_RenderSetViewport(renderer, &perspective_viewport);
 			render_perspective(renderer);
 
+			// Send everything to the video card
 		    SDL_RenderPresent(renderer);
 		}
 
         if (renderer) SDL_DestroyRenderer(renderer);
         if (window) SDL_DestroyWindow(window);
     }
+
+	free_map(w);
     SDL_Quit();
     return 0;
 }

@@ -1,3 +1,7 @@
+/*
+ * This is the build editor map format. All of it.
+ */
+
 #ifndef MAP_H
 #define MAP_H
 #include "SDL.h"
