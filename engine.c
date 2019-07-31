@@ -166,20 +166,6 @@ void render_relative(SDL_Renderer* renderer)
     SDL_RenderDrawPoint(renderer, VIEW_WIDTH/2, VIEW_HEIGHT/2);
 }
 
-void draw_wall(SDL_Renderer* renderer, wall w)
-{
-    SDL_SetRenderDrawColor(renderer, w.c.r, w.c.g, w.c.b, w.c.a);
-	int x1 = w.v1.x * fov_h / w.v1.y + VIEW_WIDTH/2;
-	int x2 = w.v2.x * fov_h / w.v2.y + VIEW_WIDTH/2;
-	double y1 = w.h * fov_v / w.v1.y;
-	double y2 = w.h * fov_v / w.v2.y;
-
-	for (int x = CLAMP(MIN(x1, x2), 0, VIEW_WIDTH); x < CLAMP(MAX(x1, x2), 0, VIEW_WIDTH); ++x) {
-		double y = y1 + (y2 - y1) * (x - x1) / (x2 - x1);
-		SDL_RenderDrawLine(renderer, x, -y + VIEW_HEIGHT/2, x, y + VIEW_HEIGHT/2);
-	}
-}
-
 void render_perspective(SDL_Renderer* renderer)
 {
 	// Render viewport border
@@ -207,7 +193,17 @@ void render_perspective(SDL_Renderer* renderer)
 			else wt.v1 = intersect;
 		}
 
-		draw_wall(renderer, wt);
+		// Draw the wall
+		SDL_SetRenderDrawColor(renderer, wt.c.r, wt.c.g, wt.c.b, wt.c.a);
+		int x1 = wt.v1.x * fov_h / wt.v1.y + VIEW_WIDTH/2;
+		int x2 = wt.v2.x * fov_h / wt.v2.y + VIEW_WIDTH/2;
+		double y1 = wt.h * fov_v / wt.v1.y;
+		double y2 = wt.h * fov_v / wt.v2.y;
+
+		for (int x = CLAMP(MIN(x1, x2), 0, VIEW_WIDTH); x < CLAMP(MAX(x1, x2), 0, VIEW_WIDTH); ++x) {
+			double y = y1 + (y2 - y1) * (x - x1) / (x2 - x1);
+			SDL_RenderDrawLine(renderer, x, -y + VIEW_HEIGHT/2, x, y + VIEW_HEIGHT/2);
+		}
 	}
 }
 
