@@ -119,7 +119,7 @@ void render_map(SDL_Renderer* renderer)
 	SDL_RenderDrawRect(renderer, &border);
 
     // Render sectors
-	for(int i=1; i<w->n_sectors; ++i) {
+	for(int i=0; i<w->n_sectors; ++i) {
 		sector* s = &w->sectors[i];
 
 		// Render walls
@@ -159,15 +159,19 @@ void render_map(SDL_Renderer* renderer)
     SDL_RenderDrawPoint(renderer, MAP_WIDTH/2, MAP_HEIGHT/2);
 }
 
-void render_perspective(SDL_Renderer* renderer)
-{
-	// Render viewport border
-	SDL_Rect border = {0, 0, VIEW_WIDTH, VIEW_HEIGHT};
-	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
-	SDL_RenderDrawRect(renderer, &border);
 
-    // Render sector player is currently in
-	sector* s = &w->sectors[p.sector];
+// These are global, so we only have to allocate the memory once
+int* screen_y_min;
+int* screen_y_max;
+int* sector_is_rendered;
+
+void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max)
+{
+	if(sector_is_rendered[sector_num])
+		return;
+	else
+		sector_is_rendered[sector_num] = 1;
+	sector* s = &w->sectors[sector_num];
 
 	// Render walls in the sector
 	wall* w1 = &w->walls[s->first_wall];
@@ -213,27 +217,27 @@ void render_perspective(SDL_Renderer* renderer)
 
 		double screen_x1 = x1 * fov_h / z1 + VIEW_WIDTH/2;
 		double screen_x2 = x2 * fov_h / z2 + VIEW_WIDTH/2;
-		double screen_x_min = CLAMP(MIN(screen_x1, screen_x2), 0, VIEW_WIDTH);
-		double screen_x_max = CLAMP(MAX(screen_x1, screen_x2), 0, VIEW_WIDTH);
+		double screen_x_min = CLAMP(MIN(screen_x1, screen_x2), sector_x_min, sector_x_max);
+		double screen_x_max = CLAMP(MAX(screen_x1, screen_x2), sector_x_min, sector_x_max);
 
 		// Draw the wall
 		//x1 = x1 * fov_h / z1 + VIEW_WIDTH/2;
 		//x2 = x2 * fov_h / z2 + VIEW_WIDTH/2;
-		double ceiling_y1 = (s->ceiling_z - p.z) * fov_v / z1;
-		double ceiling_y2 = (s->ceiling_z - p.z) * fov_v / z2;
-		double floor_y1 = (s->floor_z - p.z) * fov_v / z1;
-		double floor_y2 = (s->floor_z - p.z) * fov_v / z2;
+		double screen_ceiling_y1 = (s->ceiling_z - p.z) * fov_v / z1 + VIEW_HEIGHT/2;
+		double screen_ceiling_y2 = (s->ceiling_z - p.z) * fov_v / z2 + VIEW_HEIGHT/2;
+		double screen_floor_y1 = (s->floor_z - p.z) * fov_v / z1 + VIEW_HEIGHT/2;
+		double screen_floor_y2 = (s->floor_z - p.z) * fov_v / z2 + VIEW_HEIGHT/2;
 
-		double next_ceiling_y1;
-		double next_ceiling_y2;
-		double next_floor_y1;
-		double next_floor_y2;
+		double next_screen_ceiling_y1;
+		double next_screen_ceiling_y2;
+		double next_screen_floor_y1;
+		double next_screen_floor_y2;
 		if(w1->next_sector >= 0) {
 			sector* next_s = &w->sectors[w1->next_sector];
-			next_ceiling_y1 = (next_s->ceiling_z - p.z) * fov_v / z1;
-			next_ceiling_y2 = (next_s->ceiling_z - p.z) * fov_v / z2;
-			next_floor_y1 = (next_s->floor_z - p.z) * fov_v / z1;
-			next_floor_y2 = (next_s->floor_z - p.z) * fov_v / z2;
+			next_screen_ceiling_y1 = (next_s->ceiling_z - p.z) * fov_v / z1 + VIEW_HEIGHT/2;
+			next_screen_ceiling_y2 = (next_s->ceiling_z - p.z) * fov_v / z2 + VIEW_HEIGHT/2;
+			next_screen_floor_y1 = (next_s->floor_z - p.z) * fov_v / z1 + VIEW_HEIGHT/2;
+			next_screen_floor_y2 = (next_s->floor_z - p.z) * fov_v / z2 + VIEW_HEIGHT/2;
 		}
 
 		for (double x = screen_x_min; x < screen_x_max; ++x) {
@@ -243,22 +247,47 @@ void render_perspective(SDL_Renderer* renderer)
 			double ceiling_y = (s->ceiling_z - p.z) * fov_v / z;
 			double floor_y = (s->floor_z - p.z) * fov_v / z;
 			*/
-			double ceiling_y = ceiling_y1 + (ceiling_y2 - ceiling_y1) * ratio;
-			double floor_y = floor_y1 + (floor_y2 - floor_y1) * ratio;
+			double screen_ceiling_y = screen_ceiling_y1 + (screen_ceiling_y2 - screen_ceiling_y1) * ratio;
+			double screen_floor_y = screen_floor_y1 + (screen_floor_y2 - screen_floor_y1) * ratio;
+			screen_ceiling_y = CLAMP(screen_ceiling_y, screen_y_min[(int)x], screen_y_max[(int)x]);
+			screen_floor_y = CLAMP(screen_floor_y, screen_y_min[(int)x], screen_y_max[(int)x]);
 			if(w1->next_sector >= 0) {
-				double next_ceiling_y = next_ceiling_y1 + (next_ceiling_y2 - next_ceiling_y1) * ratio;
-				double next_floor_y = next_floor_y1 + (next_floor_y2 - next_floor_y1) * ratio;
-				if (next_ceiling_y > ceiling_y)
-					SDL_RenderDrawLine(renderer, x, ceiling_y + VIEW_HEIGHT/2, x, next_ceiling_y + VIEW_HEIGHT/2);
-				if (next_floor_y < floor_y)
-					SDL_RenderDrawLine(renderer, x, next_floor_y + VIEW_HEIGHT/2, x, floor_y + VIEW_HEIGHT/2);
+				double next_screen_ceiling_y = next_screen_ceiling_y1 + (next_screen_ceiling_y2 - next_screen_ceiling_y1) * ratio;
+				double next_screen_floor_y = next_screen_floor_y1 + (next_screen_floor_y2 - next_screen_floor_y1) * ratio;
+				if (next_screen_ceiling_y > screen_ceiling_y)
+					SDL_RenderDrawLine(renderer, x, screen_ceiling_y, x, next_screen_ceiling_y);
+				if (next_screen_floor_y < screen_floor_y)
+					SDL_RenderDrawLine(renderer, x, next_screen_floor_y, x, screen_floor_y);
 			} else {
-				SDL_RenderDrawLine(renderer, x, ceiling_y + VIEW_HEIGHT/2, x, floor_y + VIEW_HEIGHT/2);
+				SDL_RenderDrawLine(renderer, x, screen_ceiling_y, x, screen_floor_y);
 			}
+
+			// These will be the viewing window for the sector behind the portal
+			screen_y_min[(int)x] = screen_ceiling_y;
+			screen_y_max[(int)x] = screen_floor_y;
 		}
+
+		if(w1->next_sector >=0 && !sector_is_rendered[w1->next_sector])
+			render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max);
 
 		w1 = w2;
 	}
+}
+
+void render_perspective(SDL_Renderer* renderer)
+{
+	// Render viewport border
+	SDL_Rect border = {0, 0, VIEW_WIDTH, VIEW_HEIGHT};
+	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
+	SDL_RenderDrawRect(renderer, &border);
+	
+	// Set all sectors to "not rendered"
+	memset(sector_is_rendered, 0, w->n_sectors * sizeof(int));
+	memset(screen_y_min, 0, VIEW_WIDTH * sizeof(int));
+	memset(screen_y_max, VIEW_HEIGHT, VIEW_WIDTH * sizeof(int));
+
+    // Render sector player is currently in. View limits are the entire screen.
+	render_sector(renderer, p.sector, 0, VIEW_WIDTH);
 
 	// Render crosshair
 	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
@@ -337,6 +366,11 @@ int main(int argc, char* argv[])
 {
 	w = load_map("test.map");
 
+	// Initialize some arrays who's length depends on things in the map
+	sector_is_rendered = calloc(w->n_sectors, sizeof(int));
+	screen_y_min = calloc(VIEW_WIDTH, sizeof(int));
+	screen_y_max = calloc(VIEW_WIDTH, sizeof(int));
+
 	// Set the player's location, based on the starting point stored in the map
 	p.sector = w->cur_sector;
 	p.x = w->pos_x;
@@ -378,6 +412,7 @@ int main(int argc, char* argv[])
     }
 
 	free_map(w);
+	free(sector_is_rendered);
     SDL_Quit();
     return 0;
 }
