@@ -211,18 +211,50 @@ void render_perspective(SDL_Renderer* renderer)
 			SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 		}
 
+		double screen_x1 = x1 * fov_h / z1 + VIEW_WIDTH/2;
+		double screen_x2 = x2 * fov_h / z2 + VIEW_WIDTH/2;
+		double screen_x_min = CLAMP(MIN(screen_x1, screen_x2), 0, VIEW_WIDTH);
+		double screen_x_max = CLAMP(MAX(screen_x1, screen_x2), 0, VIEW_WIDTH);
+
 		// Draw the wall
-		x1 = x1 * fov_h / z1 + VIEW_WIDTH/2;
-		x2 = x2 * fov_h / z2 + VIEW_WIDTH/2;
+		//x1 = x1 * fov_h / z1 + VIEW_WIDTH/2;
+		//x2 = x2 * fov_h / z2 + VIEW_WIDTH/2;
 		double ceiling_y1 = (s->ceiling_z - p.z) * fov_v / z1;
 		double ceiling_y2 = (s->ceiling_z - p.z) * fov_v / z2;
 		double floor_y1 = (s->floor_z - p.z) * fov_v / z1;
 		double floor_y2 = (s->floor_z - p.z) * fov_v / z2;
 
-		for (int x = CLAMP(MIN(x1, x2), 0, VIEW_WIDTH); x < CLAMP(MAX(x1, x2), 0, VIEW_WIDTH); ++x) {
-			double ceiling_y = ceiling_y1 + (ceiling_y2 - ceiling_y1) * (x - x1) / (x2 - x1);
-			double floor_y = floor_y1 + (floor_y2 - floor_y1) * (x - x1) / (x2 - x1);
-			SDL_RenderDrawLine(renderer, x, ceiling_y + VIEW_HEIGHT/2, x, floor_y + VIEW_HEIGHT/2);
+		double next_ceiling_y1;
+		double next_ceiling_y2;
+		double next_floor_y1;
+		double next_floor_y2;
+		if(w1->next_sector >= 0) {
+			sector* next_s = &w->sectors[w1->next_sector];
+			next_ceiling_y1 = (next_s->ceiling_z - p.z) * fov_v / z1;
+			next_ceiling_y2 = (next_s->ceiling_z - p.z) * fov_v / z2;
+			next_floor_y1 = (next_s->floor_z - p.z) * fov_v / z1;
+			next_floor_y2 = (next_s->floor_z - p.z) * fov_v / z2;
+		}
+
+		for (double x = screen_x_min; x < screen_x_max; ++x) {
+			double ratio = (x - screen_x1) / (screen_x2 - screen_x1);
+			/*
+			double z = z1 + (z2 - z1) * ratio;
+			double ceiling_y = (s->ceiling_z - p.z) * fov_v / z;
+			double floor_y = (s->floor_z - p.z) * fov_v / z;
+			*/
+			double ceiling_y = ceiling_y1 + (ceiling_y2 - ceiling_y1) * ratio;
+			double floor_y = floor_y1 + (floor_y2 - floor_y1) * ratio;
+			if(w1->next_sector >= 0) {
+				double next_ceiling_y = next_ceiling_y1 + (next_ceiling_y2 - next_ceiling_y1) * ratio;
+				double next_floor_y = next_floor_y1 + (next_floor_y2 - next_floor_y1) * ratio;
+				if (next_ceiling_y > ceiling_y)
+					SDL_RenderDrawLine(renderer, x, ceiling_y + VIEW_HEIGHT/2, x, next_ceiling_y + VIEW_HEIGHT/2);
+				if (next_floor_y < floor_y)
+					SDL_RenderDrawLine(renderer, x, next_floor_y + VIEW_HEIGHT/2, x, floor_y + VIEW_HEIGHT/2);
+			} else {
+				SDL_RenderDrawLine(renderer, x, ceiling_y + VIEW_HEIGHT/2, x, floor_y + VIEW_HEIGHT/2);
+			}
 		}
 
 		w1 = w2;
