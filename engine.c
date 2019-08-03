@@ -163,14 +163,9 @@ void render_map(SDL_Renderer* renderer)
 // These are global, so we only have to allocate the memory once
 int* screen_y_min;
 int* screen_y_max;
-int* sector_is_rendered;
 
-void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max)
+void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max, int calling_sector_num)
 {
-	if(sector_is_rendered[sector_num])
-		return;
-	else
-		sector_is_rendered[sector_num] = 1;
 	sector* s = &w->sectors[sector_num];
 
 	// Render walls in the sector
@@ -280,8 +275,11 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 			screen_y_max[(int)x] = screen_floor_y;
 		}
 
-		if(w1->next_sector >=0 && !sector_is_rendered[w1->next_sector])
-			render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max);
+		// To prevent infinite loops, we check whether the sector the portal
+		// leads to was not the sector that performed the current render_sector
+		// call.
+		if(w1->next_sector >=0 && w1->next_sector != calling_sector_num)
+			render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max, sector_num);
 
 		w1 = w2;
 	}
@@ -294,13 +292,11 @@ void render_perspective(SDL_Renderer* renderer)
 	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
 	SDL_RenderDrawRect(renderer, &border);
 	
-	// Set all sectors to "not rendered"
-	memset(sector_is_rendered, 0, w->n_sectors * sizeof(int));
 	memset(screen_y_min, 0, VIEW_WIDTH * sizeof(int));
 	memset(screen_y_max, VIEW_HEIGHT, VIEW_WIDTH * sizeof(int));
 
     // Render sector player is currently in. View limits are the entire screen.
-	render_sector(renderer, p.sector, 0, VIEW_WIDTH);
+	render_sector(renderer, p.sector, 0, VIEW_WIDTH, p.sector);
 
 	// Render crosshair
 	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
@@ -383,7 +379,6 @@ int main(int argc, char* argv[])
 		w = load_map(argv[1]);
 
 	// Initialize some arrays who's length depends on things in the map
-	sector_is_rendered = calloc(w->n_sectors, sizeof(int));
 	screen_y_min = calloc(VIEW_WIDTH, sizeof(int));
 	screen_y_max = calloc(VIEW_WIDTH, sizeof(int));
 
@@ -428,7 +423,6 @@ int main(int argc, char* argv[])
     }
 
 	free_map(w);
-	free(sector_is_rendered);
     SDL_Quit();
     return 0;
 }
