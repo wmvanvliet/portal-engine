@@ -27,6 +27,9 @@
 // Determine which side of a line the point is on. Return value: <0, =0 or >0.
 #define POINT_SIDE(px, py, x0, y0, x1, y1) VXS((x1)-(x0), (y1)-(y0), (px)-(x0), (py)-(y0))
 
+int render_order = 0;
+int max_depth = 100;
+
 // Field of view
 float fov_h = 280;
 float fov_v = 20;
@@ -164,8 +167,9 @@ void render_map(SDL_Renderer* renderer)
 int* screen_y_min;
 int* screen_y_max;
 
-void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max, int calling_sector_num)
+void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max, int calling_sector_num, int depth)
 {
+	if(depth > max_depth) return;
 	sector* s = &w->sectors[sector_num];
 
 	// Render walls in the sector
@@ -249,6 +253,7 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 			int brightness = CLAMP(255 - 255 * z / 20000, 0, 255);
 			if (((int)x) == ((int)screen_x1) || ((int)x) == ((int)screen_x2))
 				brightness = 0;
+			//int brightness = CLAMP(255 - render_order * 10, 0, 255);
 			SDL_SetRenderDrawColor(renderer, brightness, brightness, brightness, SDL_ALPHA_OPAQUE);
 
 			/*
@@ -262,6 +267,8 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 			if(w1->next_sector >= 0) {
 				double next_screen_ceiling_y = next_screen_ceiling_y1 + (next_screen_ceiling_y2 - next_screen_ceiling_y1) * ratio;
 				double next_screen_floor_y = next_screen_floor_y1 + (next_screen_floor_y2 - next_screen_floor_y1) * ratio;
+				next_screen_ceiling_y = CLAMP(next_screen_ceiling_y, screen_ceiling_y, screen_floor_y);
+				next_screen_floor_y = CLAMP(next_screen_floor_y, screen_ceiling_y, screen_floor_y);
 				if (next_screen_ceiling_y > screen_ceiling_y)
 					SDL_RenderDrawLine(renderer, x, screen_ceiling_y, x, next_screen_ceiling_y);
 				if (next_screen_floor_y < screen_floor_y)
@@ -275,11 +282,19 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 			screen_y_max[(int)x] = screen_floor_y;
 		}
 
+		for(int x=0; x<VIEW_WIDTH; ++x) {
+			SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+			SDL_RenderDrawPoint(renderer, x, screen_y_min[x]);
+			SDL_RenderDrawPoint(renderer, x, screen_y_max[x]);
+		}
+
+		render_order++;
+
 		// To prevent infinite loops, we check whether the sector the portal
 		// leads to was not the sector that performed the current render_sector
 		// call.
-		if(w1->next_sector >=0 && w1->next_sector != calling_sector_num)
-			render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max, sector_num);
+		if(w1->next_sector >=0 && w1->next_sector != calling_sector_num && w->sectors[w1->next_sector].ceiling_z < s->floor_z && w->sectors[w1->next_sector].floor_z > s->ceiling_z)
+			render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max, sector_num, depth + 1);
 
 		w1 = w2;
 	}
@@ -294,9 +309,10 @@ void render_perspective(SDL_Renderer* renderer)
 	
 	memset(screen_y_min, 0, VIEW_WIDTH * sizeof(int));
 	memset(screen_y_max, VIEW_HEIGHT, VIEW_WIDTH * sizeof(int));
+	render_order = 0;
 
     // Render sector player is currently in. View limits are the entire screen.
-	render_sector(renderer, p.sector, 0, VIEW_WIDTH, p.sector);
+	render_sector(renderer, p.sector, 0, VIEW_WIDTH, p.sector, 0);
 
 	// Render crosshair
 	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);
@@ -326,6 +342,14 @@ void handle_events()
                     case SDLK_RIGHT:
                         p.avel = -0.002;
                         break;
+                    case SDLK_EQUALS:
+						max_depth++;
+						printf("Max_depth: %d\n", max_depth);
+						break;
+                    case SDLK_MINUS:
+						max_depth--;
+						printf("Max_depth: %d\n", max_depth);
+						break;
                     case SDLK_UP:
                         p.fvel = 4;
                         break;
