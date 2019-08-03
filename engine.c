@@ -220,6 +220,12 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 		double screen_x_min = CLAMP(MIN(screen_x1, screen_x2), sector_x_min, sector_x_max);
 		double screen_x_max = CLAMP(MAX(screen_x1, screen_x2), sector_x_min, sector_x_max);
 
+		// Wall is not visible
+		if (screen_x_min == screen_x_max) {
+			w1 = w2;
+			continue;
+		}
+
 		// Draw the wall
 		//x1 = x1 * fov_h / z1 + VIEW_WIDTH/2;
 		//x2 = x2 * fov_h / z2 + VIEW_WIDTH/2;
@@ -242,8 +248,15 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 
 		for (double x = screen_x_min; x < screen_x_max; ++x) {
 			double ratio = (x - screen_x1) / (screen_x2 - screen_x1);
-			/*
+
+			// Depth controls the brightness of the color
 			double z = z1 + (z2 - z1) * ratio;
+			int brightness = CLAMP(255 - 255 * z / 20000, 0, 255);
+			if (((int)x) == ((int)screen_x1) || ((int)x) == ((int)screen_x2))
+				brightness = 0;
+			SDL_SetRenderDrawColor(renderer, brightness, brightness, brightness, SDL_ALPHA_OPAQUE);
+
+			/*
 			double ceiling_y = (s->ceiling_z - p.z) * fov_v / z;
 			double floor_y = (s->floor_z - p.z) * fov_v / z;
 			*/
@@ -364,7 +377,10 @@ void handle_events()
 
 int main(int argc, char* argv[])
 {
-	w = load_map("test.map");
+	if (argc < 2)
+		w = load_map("test.map");
+	else
+		w = load_map(argv[1]);
 
 	// Initialize some arrays who's length depends on things in the map
 	sector_is_rendered = calloc(w->n_sectors, sizeof(int));
