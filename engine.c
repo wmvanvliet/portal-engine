@@ -167,9 +167,40 @@ void render_map(SDL_Renderer* renderer)
 int* screen_y_min;
 int* screen_y_max;
 
-void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max, int calling_sector_num, int depth)
+typedef struct render_queue_item_t {
+	int sector_num;
+	int sector_x_min;
+	int sector_x_max;
+	int calling_sector;
+} render_queue_item;
+render_queue_item render_queue[1000];
+render_queue_item *render_queue_head, *render_queue_tail = render_queue;
+
+int render_queue_empty()
 {
-	if(depth > max_depth) return;
+	return render_queue_head == render_queue_tail;
+}
+
+void render_queue_push(int sector_num, int x_min, int x_max, int calling_sector)
+{
+	*render_queue_head = (render_queue_item) {sector_num, x_min, x_max, calling_sector};
+    if (++render_queue_head == render_queue + 1000)
+		render_queue_head = render_queue;
+}
+
+render_queue_item* render_queue_pop()
+{
+	if (render_queue_empty()) {
+		printf("Trying to pop() a sector from empty queue.\n");
+	}
+    render_queue_item* item = render_queue_tail;
+    if (++render_queue_tail == render_queue + 1000)
+		render_queue_tail = render_queue;
+	return item;
+}
+
+void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int sector_x_max, int calling_sector_num)
+{
 	sector* s = &w->sectors[sector_num];
 
 	// Render walls in the sector
@@ -288,14 +319,14 @@ void render_sector(SDL_Renderer* renderer, int sector_num, int sector_x_min, int
 			SDL_RenderDrawPoint(renderer, x, screen_y_max[x]);
 		}
 
-		render_order++;
-
 		// To prevent infinite loops, we check whether the sector the portal
 		// leads to was not the sector that performed the current render_sector
 		// call.
 		if(w1->next_sector >=0 && w1->next_sector != calling_sector_num && w->sectors[w1->next_sector].ceiling_z < s->floor_z && w->sectors[w1->next_sector].floor_z > s->ceiling_z)
-			render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max, sector_num, depth + 1);
+			render_queue_push(w1->next_sector, screen_x_min, screen_x_max, sector_num);
+			//render_sector(renderer, w1->next_sector, screen_x_min, screen_x_max, sector_num, depth + 1);
 
+		render_order++;
 		w1 = w2;
 	}
 }
@@ -312,7 +343,10 @@ void render_perspective(SDL_Renderer* renderer)
 	render_order = 0;
 
     // Render sector player is currently in. View limits are the entire screen.
-	render_sector(renderer, p.sector, 0, VIEW_WIDTH, p.sector, 0);
+	render_sector(renderer, p.sector, 0, VIEW_WIDTH, p.sector);
+	while (!render_queue_empty()) {
+		render_queue_item* item = render_queue_pop();
+	}
 
 	// Render crosshair
 	SDL_SetRenderDrawColor(renderer, 0, 255, 255, SDL_ALPHA_OPAQUE);

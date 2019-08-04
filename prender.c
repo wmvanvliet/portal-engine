@@ -155,7 +155,7 @@ static void DrawScreen()
 
     /* Begin whole-screen rendering from where the player is. */
     *head = (struct item) { player.sector, 0, W-1 };
-    if(++head == queue+MaxQueue) head = queue;
+    if(++head == queue+maxqueue) head = queue;
 
     do {
     /* Pick a sector & slice from the queue to draw */
