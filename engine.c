@@ -182,15 +182,11 @@ int render_queue_empty()
 	return render_queue_head == render_queue_tail;
 }
 
-int len = 0;
-
 void render_queue_push(int sector_num, int x_min, int x_max, int calling_sector)
 {
 	*render_queue_head = (render_queue_item) {sector_num, x_min, x_max, calling_sector};
     if (++render_queue_head == render_queue + 1000)
 		render_queue_head = render_queue;
-	len++;
-	printf("queue length is now %d\n", len);
 }
 
 render_queue_item* render_queue_pop()
@@ -204,8 +200,6 @@ render_queue_item* render_queue_pop()
     if (++render_queue_tail == render_queue + 1000)
 		render_queue_tail = render_queue;
 
-	len--;
-	printf("queue length is now %d\n", len);
 	return item;
 }
 
