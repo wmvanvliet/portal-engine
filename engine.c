@@ -174,28 +174,38 @@ typedef struct render_queue_item_t {
 	int calling_sector;
 } render_queue_item;
 render_queue_item render_queue[1000];
-render_queue_item *render_queue_head, *render_queue_tail = render_queue;
+render_queue_item *render_queue_head = render_queue;
+render_queue_item *render_queue_tail = render_queue;
 
 int render_queue_empty()
 {
 	return render_queue_head == render_queue_tail;
 }
 
+int len = 0;
+
 void render_queue_push(int sector_num, int x_min, int x_max, int calling_sector)
 {
 	*render_queue_head = (render_queue_item) {sector_num, x_min, x_max, calling_sector};
     if (++render_queue_head == render_queue + 1000)
 		render_queue_head = render_queue;
+	len++;
+	printf("queue length is now %d\n", len);
 }
 
 render_queue_item* render_queue_pop()
 {
 	if (render_queue_empty()) {
 		printf("Trying to pop() a sector from empty queue.\n");
+		return NULL;
 	}
+
     render_queue_item* item = render_queue_tail;
     if (++render_queue_tail == render_queue + 1000)
 		render_queue_tail = render_queue;
+
+	len--;
+	printf("queue length is now %d\n", len);
 	return item;
 }
 
@@ -346,6 +356,8 @@ void render_perspective(SDL_Renderer* renderer)
 	render_sector(renderer, p.sector, 0, VIEW_WIDTH, p.sector);
 	while (!render_queue_empty()) {
 		render_queue_item* item = render_queue_pop();
+		render_sector(renderer, item->sector_num, item->sector_x_min, item->sector_x_max, item->calling_sector);
+		if (item == NULL) break;
 	}
 
 	// Render crosshair
